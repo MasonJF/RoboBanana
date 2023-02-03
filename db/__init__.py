@@ -65,13 +65,13 @@ class DB:
 
         self.__initialized = True
 
-        username = Config.CONFIG["MySQL"]["Username"]
-        password = Config.CONFIG["MySQL"]["Password"]
-        db_host = Config.CONFIG["MySQL"]["Host"]
-        db_name = Config.CONFIG["MySQL"]["Name"]
+        username = Config.CONFIG["Postgres"]["Username"]
+        password = Config.CONFIG["Postgres"]["Password"]
+        db_host = Config.CONFIG["Postgres"]["Host"]
+        db_name = Config.CONFIG["Postgres"]["Name"]
 
         self.engine = create_engine(
-            f"mysql+pymysql://{username}:{password}@{db_host}/{db_name}"
+            f"postgresql+psycopg2://{username}:{password}@{db_host}/{db_name}"
         )
         self.session = sessionmaker(self.engine, autoflush=True, autocommit=True)
 

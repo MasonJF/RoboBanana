@@ -15,6 +15,7 @@ import random
 
 JOEL_DISCORD_ID = 112386674155122688
 HOOJ_DISCORD_ID = 82969926125490176
+MASON_DISCORD_ID = 269948690565693444
 POINTS_AUDIT_CHANNEL = int(Config.CONFIG["Discord"]["PointsAuditChannel"])
 
 
@@ -31,7 +32,7 @@ class ModCommands(app_commands.Group, name="mod"):
 
     @staticmethod
     def check_hooj(interaction: Interaction) -> bool:
-        return interaction.user.id == HOOJ_DISCORD_ID
+        return interaction.user.id == HOOJ_DISCORD_ID or MASON_DISCORD_ID == interaction.user.id
 
     async def on_error(self, interaction: Interaction, error: AppCommandError):
         if isinstance(error, CheckFailure):

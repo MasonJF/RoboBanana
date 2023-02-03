@@ -1,5 +1,6 @@
 from functools import wraps
 from flask import request, make_response, jsonify
+from config import Config
 import os
 import sys
 
@@ -10,7 +11,6 @@ parent_directory = os.path.dirname(current_directory)
 # setting path
 sys.path.append(parent_directory)
 
-from config import Config
 
 # Authentication decorator
 def token_required(f):

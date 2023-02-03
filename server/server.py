@@ -11,7 +11,7 @@ discord.utils.setup_logging(level=logging.INFO, root=True)
 logging.getLogger("apscheduler.executors.default").setLevel(logging.ERROR)
 
 app = Flask(__name__)
-app.config["REDIS_URL"] = "redis://localhost"
+app.config["REDIS_URL"] = "redis://192.168.2.201"
 app.register_blueprint(sse, url_prefix="/stream")
 
 CORS(app, resources={"/stream": {"origins": "*"}})
