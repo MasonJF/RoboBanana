@@ -1,60 +1,71 @@
-from datetime import datetime, timedelta
-from typing import Optional
-from discord import Message
+from discord import Interaction
 from db import DB
 from config import Config
+import asyncio
 
-MESSAGE_BATCH_SIZE = int(Config.CONFIG["Discord"]["GoodMorningBatchSize"])
-MAX_TIME_BETWEEN_RESPONSE = timedelta(seconds=5)
-MESSAGE_EXPLANATION = "\n\nWhat's this message? <#1064317660084584619>"
+STREAM_CHAT_ID = int(Config.CONFIG["Discord"]["StreamChannel"])
+REWARD_ROLE_ID = int(Config.CONFIG["Discord"]["GoodMorningRewardRoleID"])
+REWARD_REDEMPTION_CHANNEL_ID = int(
+    Config.CONFIG["Discord"]["GoodMorningRewardRedemptionChannelID"]
+)
+GOOD_MORNING_EXPLANATION = "What's this message? <#1064317660084584619>"
 
 
 class GoodMorningController:
-    current_accruals = list()
-    last_response: Optional[datetime] = None
+    async def get_morning_points(interaction: Interaction):
+        points = DB().get_morning_points(interaction.user.id)
+        await interaction.response.send_message(
+            f"Your current weekly count is {points}!", ephemeral=True
+        )
 
-    async def _send_accrual_responses(message: Message):
-        response = "\n".join(GoodMorningController.current_accruals)
-        response += MESSAGE_EXPLANATION
-        await message.channel.send(response)
-        GoodMorningController.last_response = message.created_at
-        GoodMorningController.current_accruals = list()
+    async def accrue_good_morning(interaction: Interaction):
+        if interaction.channel.id != STREAM_CHAT_ID:
+            return await interaction.response.send_message(
+                f"You can only say good morning in <#{STREAM_CHAT_ID}>!", ephemeral=True
+            )
 
-    def _should_respond(message: Message):
-        if GoodMorningController.last_response is None:
-            GoodMorningController.last_response = message.created_at
-
-        if len(GoodMorningController.current_accruals) == 0:
-            return False
-
-        if len(GoodMorningController.current_accruals) >= MESSAGE_BATCH_SIZE:
-            return True
-
-        time_passed = message.created_at - GoodMorningController.last_response
-        if time_passed >= MAX_TIME_BETWEEN_RESPONSE:
-            return True
-
-        return False
-
-    async def handle_response(message: Message):
-        """Respond to good morning messages if requirements met
-
-        Args:
-            message (Message): Message in stream chat
-        """
-        if GoodMorningController._should_respond(message):
-            await GoodMorningController._send_accrual_responses(message)
-
-    async def accrue_good_morning(message: Message):
-        """Accrue good morning message point
-
-        Args:
-            message (Message): "good morning" stream chat message
-        """
-        accrued = DB().accrue_morning_points(message.author.id)
+        accrued = DB().accrue_morning_points(interaction.user.id)
         if not accrued:
-            return
+            return await interaction.response.send_message(
+                "You've already said good morning today!", ephemeral=True
+            )
 
-        points = DB().get_morning_points(message.author.id)
-        response = f"Good morning {message.author.mention}! Your current weekly count is {points}!"
-        GoodMorningController.current_accruals.append(response)
+        points = DB().get_morning_points(interaction.user.id)
+        await interaction.response.send_message(
+            (
+                f"Good morning {interaction.user.mention}! "
+                f"Your current weekly count is {points}! "
+                f"{GOOD_MORNING_EXPLANATION}"
+            )
+        )
+
+    async def reward_users(interaction: Interaction):
+        rewarded_user_ids = DB().get_morning_reward_winners()
+        if len(rewarded_user_ids) == 0:
+            return await interaction.response.send_message(
+                "No users to reward!", ephemeral=True
+            )
+
+        reward_role = interaction.guild.get_role(REWARD_ROLE_ID)
+
+        # Assign roles
+        for user_id in rewarded_user_ids:
+            member = interaction.guild.get_member(user_id)
+            if member is None:
+                continue
+            await member.add_roles(reward_role)
+
+            # Rate limit
+            await asyncio.sleep(1)
+
+        reward_message = (
+            f"Congrats {reward_role.mention}!"
+            f" Head over to <#{REWARD_REDEMPTION_CHANNEL_ID}> to redeem your reward!"
+        )
+        await interaction.response.send_message(reward_message)
+
+    async def reset_all_morning_points(interaction: Interaction):
+        DB().reset_all_morning_points()
+        await interaction.response.send_message(
+            "Successfully reset weekly good morning points!", ephemeral=True
+        )

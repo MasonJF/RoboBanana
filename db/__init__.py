@@ -6,11 +6,16 @@ from typing import Optional
 
 from .point_accrual import (
     accrue_channel_points,
-    accrue_morning_points,
-    get_morning_points,
     deposit_points,
     get_point_balance,
     withdraw_points,
+)
+from .good_morning import (
+    accrue_morning_points,
+    get_morning_points,
+    get_morning_reward_winners,
+    get_today_morning_count,
+    reset_all_morning_points,
 )
 from .predictions import (
     accepting_prediction_entries,
@@ -295,6 +300,42 @@ class DB:
                 .execution_options(synchronize_session="fetch")
             )
 
+    def remove_raffle_winner(
+        self, guild_id: int, user_id: int, after: datetime
+    ) -> None:
+        with self.session() as sess:
+            # removes winner from raffle entry within last week, so winner can win again
+
+            stmt = (
+                select(Raffle.id)
+                .select_from(RaffleEntry)
+                .join(Raffle)
+                .where(Raffle.guild_id == guild_id)
+                .where(Raffle.ended == True)
+                .where(Raffle.raffle_type == RaffleType.normal)
+                .where(RaffleEntry.winner == True)
+                .where(RaffleEntry.user_id == user_id)
+                .where(Raffle.end_time > after)
+                .order_by(Raffle.id.desc())
+                .limit(1)
+            )
+
+            last_win_raffle_id = sess.execute(stmt).scalar()
+
+            if last_win_raffle_id is None:
+                return False
+
+            sess.execute(
+                update(RaffleEntry)
+                .values(winner=False)
+                .where(RaffleEntry.user_id == user_id)
+                .where(RaffleEntry.raffle_id == last_win_raffle_id)
+                .where(RaffleEntry.winner == True)
+                .execution_options(synchronize_session="fetch")
+            )
+
+            return True
+
     def get_role_modifiers(self, guild_id: int) -> dict[int, int]:
         with self.session() as sess:
             stmt = select(RoleModifier).where(RoleModifier.guild_id == guild_id)
@@ -337,6 +378,26 @@ class DB:
             int: Number of morning greetings currently awarded
         """
         return get_morning_points(user_id, self.session)
+
+    def get_today_morning_count(self) -> int:
+        """Get the number of users which have said good morning today
+
+        Returns:
+            int: Number of users who have said good morning today
+        """
+        return get_today_morning_count(self.session)
+
+    def get_morning_reward_winners(self) -> list[int]:
+        """Get the Discord User IDs of all users who earned good morning reward
+
+        Returns:
+            list[int]: Discord User IDs of users to reward
+        """
+        return get_morning_reward_winners(self.session)
+
+    def reset_all_morning_points(self):
+        """Set weekly_count to 0 for all users"""
+        return reset_all_morning_points(self.session)
 
     def get_point_balance(self, user_id: int) -> int:
         """Get the number of points a user has accrued
